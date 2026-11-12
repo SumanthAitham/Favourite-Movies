@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: movie_memory
+      POSTGRES_PASSWORD: movie_memory_local
+      POSTGRES_DB: movie_memory
+    volumes:
+      - movie_memory_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U movie_memory -d movie_memory"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  movie_memory_data:
