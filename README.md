@@ -122,6 +122,6 @@ Full Google login/logout, mobile layout, and keyboard interactions still need br
 
 - Used Codex for scaffolding, implementation, and refactoring.
 - Used it to write and run tests, investigate failures, and review authorization checks.
-- Used it to help draft documentation. Automated checks and unverified browser flows are reported separately above.
+
 
 Movie metadata and images come from [TMDB](https://www.themoviedb.org/). This product uses the TMDB API but is not endorsed or certified by TMDB.
