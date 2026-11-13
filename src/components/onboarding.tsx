@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import type { MoviePage, MovieSummary, Viewer } from "@/lib/types";
+import { appendMovies } from "@/lib/movie-list";
 import { errorMessage, requestJson } from "./client-api";
 import { FactDialog } from "./fact-dialog";
 import { MovieCard, MoviePoster } from "./movie-card";
@@ -62,15 +63,7 @@ export function Onboarding({
           page > 1 && previous
             ? {
                 ...data,
-                movies: [
-                  ...previous.movies,
-                  ...data.movies.filter(
-                    (movie) =>
-                      !previous.movies.some(
-                        (existing) => existing.tmdbId === movie.tmdbId,
-                      ),
-                  ),
-                ],
+                movies: appendMovies(previous.movies, data.movies),
               }
             : data,
         );

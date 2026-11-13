@@ -1,5 +1,8 @@
 import { AppError } from "@/lib/errors";
+import type { FactResult } from "@/lib/types";
 import { FactGenerationError } from "./generation-error";
+
+export type { FactResult } from "@/lib/types";
 
 export const FACT_TTL_MS = 60_000;
 export const MAX_FACT_LENGTH = 1_000;
@@ -15,12 +18,6 @@ export type FactMovie = {
 export type StoredFact = {
   content: string;
   createdAt: Date;
-};
-
-export type FactResult = {
-  content: string;
-  createdAt: string;
-  source: "cache" | "generated" | "stale";
 };
 
 export type FactRepository = {
@@ -42,7 +39,7 @@ type FactServiceDependencies = {
   now?: () => number;
 };
 
-function result(fact: StoredFact, source: FactResult["source"]): FactResult {
+function toFactResult(fact: StoredFact, source: FactResult["source"]): FactResult {
   return {
     content: fact.content,
     createdAt: fact.createdAt.toISOString(),
@@ -50,7 +47,7 @@ function result(fact: StoredFact, source: FactResult["source"]): FactResult {
   };
 }
 
-function validContent(content: unknown): string {
+function validateFactContent(content: unknown): string {
   if (typeof content !== "string") {
     throw new Error("Invalid generated fact");
   }
@@ -71,16 +68,13 @@ function favoriteNotFound(): AppError {
   );
 }
 
-/**
- * Each service instance coordinates one server process. Multiple replicas need
- * a shared database-backed guard; this map is intentionally not a global lock.
- */
 export function createFactService({
   repository,
   generate,
   now = Date.now,
 }: FactServiceDependencies) {
-  const active = new Map<string, Promise<FactResult>>();
+  // Shared within this process. Multiple replicas need a database-backed guard.
+  const pendingGenerations = new Map<string, Promise<FactResult>>();
   const isFresh = (fact: StoredFact) =>
     now() - fact.createdAt.getTime() < FACT_TTL_MS;
 
@@ -113,26 +107,25 @@ export function createFactService({
     };
 
     const cached = await repository.findLatest(userId, movie.id);
-    if (cached && isFresh(cached)) return result(cached, "cache");
+    if (cached && isFresh(cached)) return toFactResult(cached, "cache");
 
     const key = JSON.stringify([userId, movie.id]);
-    const existing = active.get(key);
+    const existing = pendingGenerations.get(key);
     if (existing) return existing;
 
-    // Deferring work to the next microtask lets us register the shared promise
-    // synchronously, before the database recheck or generator can yield.
+    // Register the promise before starting work so simultaneous requests join it.
     const operation = Promise.resolve()
       .then(async (): Promise<FactResult> => {
         const latest = await repository.findLatest(userId, movie.id);
-        if (latest && isFresh(latest)) return result(latest, "cache");
+        if (latest && isFresh(latest)) return toFactResult(latest, "cache");
 
         try {
-          const content = validContent(await generate(movie));
+          const content = validateFactContent(await generate(movie));
           // Generation can take seconds. Honor a removal made while it ran.
           await ensureStillFavorite();
           // The repository timestamps successful storage, not request start.
           const saved = await repository.save(userId, movie.id, content);
-          return result(saved, "generated");
+          return toFactResult(saved, "generated");
         } catch (error) {
           if (
             error instanceof AppError &&
@@ -143,7 +136,7 @@ export function createFactService({
           // A provider/storage failure must not bypass an intervening removal.
           await ensureStillFavorite();
           // Returning a stale fact never writes or refreshes its timestamp.
-          if (latest) return result(latest, "stale");
+          if (latest) return toFactResult(latest, "stale");
           if (error instanceof FactGenerationError) {
             throw new AppError(
               error.code,
@@ -159,10 +152,12 @@ export function createFactService({
         }
       })
       .finally(() => {
-        if (active.get(key) === operation) active.delete(key);
+        if (pendingGenerations.get(key) === operation) {
+          pendingGenerations.delete(key);
+        }
       });
 
-    active.set(key, operation);
+    pendingGenerations.set(key, operation);
     return operation;
   };
 }

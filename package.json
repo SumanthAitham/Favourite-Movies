@@ -14,7 +14,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:database": "RUN_DATABASE_TESTS=1 vitest run tests/database.integration.test.ts",
-    "test:gemini": "RUN_GEMINI_LIVE_TESTS=1 vitest run tests/gemini.live.test.ts",
+    "test:openai": "RUN_OPENAI_LIVE_TESTS=1 vitest run tests/openai.live.test.ts",
     "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",

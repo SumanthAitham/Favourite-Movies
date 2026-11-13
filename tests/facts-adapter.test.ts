@@ -14,7 +14,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 vi.mock("@/lib/tmdb", () => ({ getMovie: mocks.movie }));
-vi.mock("@/lib/gemini", () => ({ generateMovieFact: mocks.generate }));
+vi.mock("@/lib/openai", () => ({ generateMovieFact: mocks.generate }));
 import { getMovieFact } from "@/lib/facts";
 
 const movie = {

@@ -42,7 +42,7 @@ export default async function About() {
         </p>
         <h2>The little stories</h2>
         <p>
-          The “Did you know?” facts are generated with Google Gemini. They are not
+          The “Did you know?” facts are generated with OpenAI. They are not
           independently verified and may contain mistakes. They are intended as
           a starting point for curiosity.
         </p>

@@ -4,12 +4,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { getMovieFact } from "@/lib/facts";
 
-// Explicit opt-in: consumes Gemini quota and uses the local development DB.
-describe.skipIf(process.env.RUN_GEMINI_LIVE_TESTS !== "1")(
-  "live Gemini fact pipeline",
+// Explicit opt-in: consumes OpenAI quota and uses the local development DB.
+describe.skipIf(process.env.RUN_OPENAI_LIVE_TESTS !== "1")(
+  "live OpenAI fact pipeline",
   () => {
-    const userId = `gemini-smoke-${randomUUID()}`;
-    const tmdbId = Number(process.env.GEMINI_SMOKE_TMDB_ID || "272");
+    const userId = `openai-smoke-${randomUUID()}`;
+    const tmdbId = Number(process.env.OPENAI_SMOKE_TMDB_ID || "272");
     let fixtureCreated = false;
 
     beforeAll(async () => {
@@ -19,8 +19,8 @@ describe.skipIf(process.env.RUN_GEMINI_LIVE_TESTS !== "1")(
         url.pathname !== "/movie_memory"
       )
         throw new Error("Live checks require the local movie_memory database.");
-      if (!process.env.GEMINI_API_KEY || !process.env.TMDB_READ_ACCESS_TOKEN)
-        throw new Error("Configure Gemini and TMDB before running this check.");
+      if (!process.env.OPENAI_API_KEY || !process.env.TMDB_READ_ACCESS_TOKEN)
+        throw new Error("Configure OpenAI and TMDB before running this check.");
       const movie = await prisma.movie.findUnique({ where: { tmdbId } });
       if (!movie)
         throw new Error("Save the selected movie before running this check.");

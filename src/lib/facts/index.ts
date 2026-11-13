@@ -1,7 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db";
-import { generateMovieFact } from "@/lib/gemini";
+import { generateMovieFact } from "@/lib/openai";
 import { getMovie } from "@/lib/tmdb";
 import { createFactService, type FactRepository } from "./service";
 
@@ -40,8 +40,7 @@ export const getMovieFact = createFactService({
     try {
       if (movie.tmdbId) overview = (await getMovie(movie.tmdbId)).overview;
     } catch {
-      // Extra context is optional. A TMDB outage must not prevent using the
-      // already-persisted title/year or the stale-fact fallback.
+      // The stored title and year are enough if TMDB is unavailable.
     }
     return generateMovieFact({ ...movie, overview });
   },

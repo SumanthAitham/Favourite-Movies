@@ -22,8 +22,7 @@ export function isAuthConfigured(): boolean {
   );
 }
 
-// React cache deduplicates reads within a server render; it is not a global
-// user cache and never shares a session between different requests.
+// Deduplicate session reads within a render, never across requests.
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   if (!isAuthConfigured()) return null;
 

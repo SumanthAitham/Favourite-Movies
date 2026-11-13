@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { signInWithGoogle } from "@/actions/auth";
+import { appendMovies } from "@/lib/movie-list";
 import type {
   Genre,
   GenreSection,
@@ -132,15 +133,7 @@ export function Catalog({
           append && previous
             ? {
                 ...data,
-                movies: [
-                  ...previous.movies,
-                  ...data.movies.filter(
-                    (movie) =>
-                      !previous.movies.some(
-                        (existing) => existing.tmdbId === movie.tmdbId,
-                      ),
-                  ),
-                ],
+                movies: appendMovies(previous.movies, data.movies),
               }
             : data,
         );
@@ -180,15 +173,7 @@ export function Catalog({
                 ...item,
                 page: data.page,
                 totalPages: data.totalPages,
-                movies: [
-                  ...item.movies,
-                  ...data.movies.filter(
-                    (movie) =>
-                      !item.movies.some(
-                        (existing) => existing.tmdbId === movie.tmdbId,
-                      ),
-                  ),
-                ],
+                movies: appendMovies(item.movies, data.movies),
               }
             : item,
         ),

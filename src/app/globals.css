@@ -212,7 +212,7 @@ a svg {
   }
 }
 
-/* The frame */
+/* Header and footer */
 .site-header {
   border-bottom: 1px solid var(--line);
 }
@@ -318,7 +318,7 @@ a svg {
   color: var(--accent-light);
 }
 
-/* Opening credits */
+/* Homepage hero */
 .hero {
   display: grid;
   grid-template-columns: 1.12fr 1fr;
@@ -1058,7 +1058,7 @@ a svg {
   }
 }
 
-/* A film's little story */
+/* Fact dialog */
 .fact-dialog {
   position: fixed;
   top: 50%;
@@ -1206,7 +1206,7 @@ a svg {
   margin-top: 22px;
 }
 
-/* The personal collection */
+/* Dashboard */
 .dashboard-page {
   padding-top: 65px;
   min-height: calc(100vh - 268px);
@@ -1423,7 +1423,7 @@ a svg {
   flex-shrink: 0;
 }
 
-/* The first favorite */
+/* Onboarding */
 .onboarding-page {
   padding-top: 50px;
   width: min(1020px, calc(100% - 96px));
@@ -1617,7 +1617,7 @@ a svg {
   color: #c1c9a9;
 }
 
-/* Shared document and system states */
+/* About, loading, and error pages */
 .prose-page {
   max-width: 760px;
   padding-top: 60px;

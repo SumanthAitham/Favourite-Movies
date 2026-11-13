@@ -37,7 +37,6 @@ export async function addFavorite(
 ): Promise<MovieSummary> {
   assertUser(userId);
   const id = parseTmdbId(tmdbId);
-  // Callers provide only an ID. Movie metadata is always resolved server-side.
   const trustedMovie = await getMovie(id);
   const metadata = {
     tmdbId: id,
@@ -63,8 +62,7 @@ export async function addFavorite(
         });
 
         if (onboarding) {
-          // The transaction commits the first favorite and onboarding together.
-          // A repeated confirmation must not replace a completed timestamp.
+          // Keep the original completion time if onboarding is submitted again.
           await tx.user.updateMany({
             where: { id: userId, onboardingCompletedAt: null },
             data: { onboardingCompletedAt: new Date() },
@@ -99,7 +97,6 @@ export async function removeFavorite(
 ): Promise<void> {
   assertUser(userId);
   const id = parseTmdbId(tmdbId);
-  // Deleting only this join row preserves other users, movie metadata and facts.
   await prisma.favorite.deleteMany({
     where: { userId, movie: { tmdbId: id } },
   });

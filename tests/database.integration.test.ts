@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ getMovie: vi.fn(), generate: vi.fn() }));
 vi.mock("@/lib/tmdb", () => ({ getMovie: mocks.getMovie }));
-vi.mock("@/lib/gemini", () => ({ generateMovieFact: mocks.generate }));
+vi.mock("@/lib/openai", () => ({ generateMovieFact: mocks.generate }));
 
 import { prisma } from "@/lib/db";
 import { addFavorite, listFavorites, removeFavorite } from "@/lib/favorites";
