@@ -12,3 +12,4 @@ src/generated/
 .aws/
 .codex/
 .agents/
+*Agents
