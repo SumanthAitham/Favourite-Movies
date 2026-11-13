@@ -55,11 +55,11 @@ TMDB credentials are available in your TMDB account’s API settings. Create an 
 4. A successful save marks the movie as saved, then opens the fact dialog. Fact generation is a separate request; failures cannot roll back the favorite.
 5. Reopen “Did you know?” for a saved film, or remove it. Removing every favorite does not restart onboarding.
 
-On a fact-cache miss, the server tries to supply OpenAI with a trusted TMDB overview alongside the stored title and release year. This helps identify recent or unfamiliar films. If TMDB is unavailable, generation can still use the stored title/year. An empty OpenAI response is treated as **no fact available for this film** (`FACT_NOT_AVAILABLE`, HTTP 422), rather than a service outage. An existing saved fact is always preferred as the fallback, with its timestamp unchanged.
+On a fact-cache miss, the server supplies the last five user/movie facts and asks for a different underlying detail. Exact and near-verbatim repeats are rejected rather than saved as new facts; this wording check cannot detect every paraphrase. The server also tries to supply OpenAI with a trusted TMDB overview alongside the stored title and release year. This helps identify recent or unfamiliar films. If TMDB is unavailable, generation can still use the stored title/year. An empty OpenAI response is treated as **no fact available for this film** (`FACT_NOT_AVAILABLE`, HTTP 422), rather than a service outage. An existing saved fact is always preferred as the fallback, with its timestamp unchanged.
 
 ## Architecture
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the data model, cache algorithm, authorization boundaries, and tradeoffs.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the data model, cache algorithm, authorization boundaries, and tradeoffs, and [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) for the assignment checklist.
 
 ```text
 src/app/                Server pages, protected routes, and API handlers
@@ -83,22 +83,22 @@ npm test
 npm run build
 ```
 
-The normal test suite uses mocked dependencies. It covers exact cache timing, one generation for simultaneous requests, user/movie isolation, authorization, malformed input, origin checks, failure fallback, retries, trusted metadata, favorite transactions, and the OpenAI adapter. Five database integration checks and one live OpenAI check are skipped by default.
+The normal test suite uses mocked dependencies. It covers exact cache timing, one generation for simultaneous requests, user/movie isolation, authorization, malformed input, origin checks, failure fallback, retries, trusted metadata, favorite transactions, and the OpenAI adapter. Seven database integration checks and one live OpenAI check are skipped by default.
 
-With the local database running and migrated:
+With the local database running and migrated (these checks refuse hosted databases):
 
 ```bash
-npm run test:database
+DATABASE_URL="postgresql://movie_memory:movie_memory_local@localhost:5432/movie_memory?schema=public" npm run test:database
 ```
 
-These **five integration tests** use the real local Postgres database and mock only TMDB/OpenAI. They create uniquely named fixtures, clean up only their own records, and refuse non-local databases or a database name other than `movie_memory`.
+These **seven integration tests** use the real local Postgres database and mock only TMDB/OpenAI. They create uniquely named fixtures, clean up only their own records, and refuse non-local databases or a database name other than `movie_memory`.
 
-Latest local checks: 143 unit/handler tests, five PostgreSQL integration tests, lint, and the production build (including TypeScript) passed. The live OpenAI/TMDB/database check has not been run yet; it needs an OpenAI API key. Full Google OAuth flows, mobile layout, and keyboard interactions still need browser acceptance testing.
+Latest local checks: 168 unit/handler tests, seven PostgreSQL integration tests, lint, and the production build (including TypeScript) passed. The live OpenAI/TMDB/database check passed: generation, persistence, and cache reuse were verified using a disposable local test user. Full Google OAuth flows, mobile layout, and keyboard interactions still need browser acceptance testing.
 
 To check the real OpenAI/TMDB/database pipeline for a movie already stored locally:
 
 ```bash
-OPENAI_SMOKE_TMDB_ID=272 npm run test:openai
+DATABASE_URL="postgresql://movie_memory:movie_memory_local@localhost:5432/movie_memory?schema=public" OPENAI_SMOKE_TMDB_ID=272 npm run test:openai
 ```
 
 This opt-in check consumes OpenAI quota, creates an isolated test user, verifies generation/persistence/cache, and removes that user's fixtures. It does not modify existing users or their favorites. Use a stored TMDB ID; the default is `272` (Batman Begins).
@@ -118,18 +118,20 @@ For production locally, run `npm run build` then `npm start`. `npm run db:dev` c
 Variant A focuses on backend caching, concurrent requests, and failure recovery. Variant B's client-cache and optimistic-edit requirements are out of scope. Genre browsing and multiple favorites extend the original exercise. Fact generation uses the required OpenAI API.
 
 - Facts are stored in PostgreSQL and reused for 60 seconds per user/movie. There is no Redis or background refresh job.
-- An in-memory Map shares running generation requests within one server process. Multiple instances need a database-backed lease or lock.
-- Saved favorites remain available during a TMDB outage. A OpenAI failure leaves the favorite saved and returns an older fact when possible.
+- A local Map shares running requests within a process. PostgreSQL transaction-scoped advisory locks coordinate generation across Vercel instances. The tradeoff is holding a database connection while the provider runs; waits and transactions are bounded.
+- Saved favorites remain available during a TMDB outage. An OpenAI failure leaves the favorite saved and returns an older fact when possible.
 - OpenAI can return no fact for a film. The UI offers retry and labels generated facts as unverified.
 - Auth.js uses a pinned v5 beta. The initial dependency audit reported seven moderate development-tool findings in ESLint's dependency tree; review these before submission.
 
 ## With two more hours
 
-Finish the browser acceptance checks above and add regression tests for onboarding and switching movies in the fact dialog. If hosting runs multiple instances, add a database-backed generation lease. Then review dependency updates and add per-user generation limits.
+Finish the browser acceptance checks above and add regression tests for onboarding and switching movies in the fact dialog. Then add per-user generation limits and operational metrics, review dependency updates, and consider a durable job queue if generation traffic grows.
 
 ## AI usage
 
-Codex assisted with scaffolding, implementation, tests, review, and documentation. The checks above distinguish automated coverage from browser flows that still need verification.
+- Used Codex to assist with scaffolding, implementation, and refactoring.
+- Used Codex to develop and run tests, inspect failures, and review security boundaries.
+- Used Codex to draft setup and architecture documentation. Automated and live service checks are reported separately from browser flows still awaiting manual verification.
 
 ## References and credits
 

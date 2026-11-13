@@ -38,6 +38,9 @@ function setup() {
     findLatest: vi.fn(async (userId: string, movieId: string) => {
       return rows.get(key(userId, movieId))?.at(-1) ?? null;
     }),
+    findRecent: vi.fn(async (userId: string, movieId: string) =>
+      [...(rows.get(key(userId, movieId)) ?? [])].reverse().slice(0, 5),
+    ),
     save: vi.fn(async (userId: string, movieId: string, content: string) => {
       const fact = { content, createdAt: new Date(time) };
       const rowKey = key(userId, movieId);
@@ -436,5 +439,74 @@ describe("generation failures", () => {
       source: "generated",
     });
     expect(h.generate).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("database coordinator failures", () => {
+  it("returns an unchanged stale fact when lock acquisition fails", async () => {
+    const h = setup();
+    const old = h.seed(FACT_TTL_MS);
+    const getFact = createFactService({
+      repository: h.repository,
+      generate: h.generate,
+      now: () => START,
+      coordinate: async () => { throw new Error("Lock wait timed out"); },
+    });
+    await expect(getFact("user-a", 101)).resolves.toMatchObject({
+      content: old.content, createdAt: old.createdAt.toISOString(), source: "stale",
+    });
+    expect(h.generate).not.toHaveBeenCalled();
+  });
+
+  it("returns a friendly error when the lock fails without a cached fact", async () => {
+    const h = setup();
+    const getFact = createFactService({
+      repository: h.repository,
+      generate: h.generate,
+      coordinate: async () => { throw new Error("Lock unavailable"); },
+    });
+    await expect(getFact("user-a", 101)).rejects.toMatchObject({ code: "FACT_UNAVAILABLE", status: 503 });
+    expect(h.generate).not.toHaveBeenCalled();
+  });
+
+  it("rechecks ownership after waiting for another worker", async () => {
+    const h = setup();
+    const getFact = createFactService({
+      repository: h.repository,
+      generate: h.generate,
+      coordinate: async (_user, _movie, work) => {
+        h.favorites.clear();
+        return work(h.repository);
+      },
+    });
+    await expect(getFact("user-a", 101)).rejects.toMatchObject({ code: "FAVORITE_NOT_FOUND" });
+    expect(h.generate).not.toHaveBeenCalled();
+  });
+});
+
+describe("fact variety", () => {
+  it("passes only recent history for the current user and movie", async () => {
+    const h = setup();
+    h.seed(FACT_TTL_MS, "user-b");
+    const history = Array.from({ length: 7 }, (_, index) => ({ content: `Earlier fact ${index}`, createdAt: new Date(START - FACT_TTL_MS) }));
+    h.rows.set(key("user-a", "movie-a"), history);
+    await h.getFact("user-a", 101);
+    expect(h.repository.findRecent).toHaveBeenCalledWith("user-a", "movie-a");
+    expect(h.generate).toHaveBeenCalledWith({ ...MOVIES.get(101), previousFacts: history.slice(-5).reverse().map((fact) => fact.content) });
+  });
+  it("does not save repeated text as a newly generated fact", async () => {
+    const h = setup();
+    const old = h.seed(FACT_TTL_MS);
+    h.generate.mockResolvedValue(old.content.toUpperCase());
+    await expect(h.getFact("user-a", 101)).resolves.toMatchObject({ source: "stale", createdAt: old.createdAt.toISOString() });
+    expect(h.repository.save).not.toHaveBeenCalled();
+    expect(h.generate).toHaveBeenCalledOnce();
+  });
+  it("does not load history on a fresh cache hit", async () => {
+    const h = setup();
+    h.seed(1000);
+    await h.getFact("user-a", 101);
+    expect(h.repository.findRecent).not.toHaveBeenCalled();
+    expect(h.generate).not.toHaveBeenCalled();
   });
 });

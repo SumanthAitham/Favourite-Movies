@@ -3,14 +3,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   favorite: vi.fn(),
   latest: vi.fn(),
+  recent: vi.fn(),
   save: vi.fn(),
   movie: vi.fn(),
   generate: vi.fn(),
 }));
 vi.mock("@/lib/db", () => ({
   prisma: {
+    $transaction: (work: (tx: unknown) => unknown) => work({
+      $executeRaw: vi.fn(), $queryRaw: vi.fn(),
+      favorite: { findFirst: mocks.favorite },
+      movieFact: { findFirst: mocks.latest, findMany: mocks.recent, create: mocks.save },
+    }),
     favorite: { findFirst: mocks.favorite },
-    movieFact: { findFirst: mocks.latest, create: mocks.save },
+    movieFact: { findFirst: mocks.latest, findMany: mocks.recent, create: mocks.save },
   },
 }));
 vi.mock("@/lib/tmdb", () => ({ getMovie: mocks.movie }));
@@ -27,6 +33,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.favorite.mockResolvedValue({ movie });
   mocks.latest.mockResolvedValue(null);
+  mocks.recent.mockResolvedValue([]);
   mocks.movie.mockResolvedValue({
     ...movie,
     overview: "A traveler discovers a hidden city.",
@@ -48,6 +55,12 @@ describe("fact provider context", () => {
       overview: "A traveler discovers a hidden city.",
     });
     expect(mocks.save).toHaveBeenCalledOnce();
+    expect(mocks.recent).toHaveBeenCalledWith({
+      where: { userId: "user-1", movieId: "movie-1" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 5,
+      select: { content: true, createdAt: true },
+    });
   });
   it("uses stored title and year if TMDB context is unavailable", async () => {
     mocks.movie.mockRejectedValue(new Error("TMDB unavailable"));

@@ -9,6 +9,7 @@ vi.mock("@/lib/openai", () => ({ generateMovieFact: mocks.generate }));
 import { prisma } from "@/lib/db";
 import { addFavorite, listFavorites, removeFavorite } from "@/lib/favorites";
 import { getMovieFact } from "@/lib/facts";
+import { createDatabaseFactService } from "@/lib/facts/database";
 
 // Opt-in only. These tests use real Postgres; external API responses are mocked.
 describe.skipIf(process.env.RUN_DATABASE_TESTS !== "1")(
@@ -116,6 +117,55 @@ describe.skipIf(process.env.RUN_DATABASE_TESTS !== "1")(
       await expect(getMovieFact(bob, movieId)).rejects.toMatchObject({
         code: "FAVORITE_NOT_FOUND",
       });
+    });
+
+    it("coordinates independent service instances through Postgres", async () => {
+      await prisma.movieFact.deleteMany({ where: { userId: alice } });
+      let release!: () => void;
+      let started!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const ready = new Promise<void>((resolve) => { started = resolve; });
+      let generatedAt = 0;
+      const generate = vi.fn(async () => {
+        started();
+        await gate;
+        generatedAt = Date.now();
+        return "One fact across independent workers.";
+      });
+      const firstWorker = createDatabaseFactService(prisma, generate);
+      const secondWorker = createDatabaseFactService(prisma, generate);
+      const first = firstWorker(alice, movieId);
+      await ready;
+      const second = secondWorker(alice, movieId);
+      try {
+        let waiting = false;
+        for (let attempt = 0; attempt < 100; attempt++) {
+          const [row] = await prisma.$queryRaw<{ waiting: boolean }[]>`
+            SELECT EXISTS (SELECT 1 FROM pg_locks
+              WHERE locktype = 'advisory' AND NOT granted) AS waiting`;
+          if (row.waiting) { waiting = true; break; }
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        expect(waiting).toBe(true);
+        expect(generate).toHaveBeenCalledOnce();
+      } finally {
+        release();
+      }
+      const results = await Promise.all([first, second]);
+      expect(generate).toHaveBeenCalledOnce();
+      expect(results.map((fact) => fact.source)).toEqual(["generated", "cache"]);
+      expect(Date.parse(results[0].createdAt)).toBeGreaterThanOrEqual(generatedAt);
+      expect(await prisma.movieFact.count({ where: { userId: alice } })).toBe(1);
+    });
+
+    it("releases the database lock after failure so another worker can retry", async () => {
+      await prisma.movieFact.deleteMany({ where: { userId: alice } });
+      const failed = createDatabaseFactService(prisma, async () => {
+        throw new Error("Provider unavailable");
+      });
+      await expect(failed(alice, movieId)).rejects.toMatchObject({ code: "FACT_UNAVAILABLE" });
+      const retry = createDatabaseFactService(prisma, async () => "Retry succeeded.");
+      await expect(retry(alice, movieId)).resolves.toMatchObject({ source: "generated" });
     });
 
     it("removes only the caller's favorite and leaves shared metadata and onboarding intact", async () => {

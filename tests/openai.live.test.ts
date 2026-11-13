@@ -50,6 +50,15 @@ describe.skipIf(process.env.RUN_OPENAI_LIVE_TESTS !== "1")(
         content: fact.content,
         createdAt: fact.createdAt,
       });
-    }, 35_000);
+      // Expire only this disposable user's fact to exercise regeneration.
+      await prisma.movieFact.updateMany({
+        where: { userId },
+        data: { createdAt: new Date(Date.now() - 61_000) },
+      });
+      const fresh = await getMovieFact(userId, tmdbId);
+      expect(fresh.source).toBe("generated");
+      expect(fresh.content).not.toBe(fact.content);
+      expect(await prisma.movieFact.count({ where: { userId } })).toBe(2);
+    }, 60_000);
   },
 );
