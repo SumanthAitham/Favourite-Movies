@@ -12,4 +12,4 @@ src/generated/
 .aws/
 .codex/
 .agents/
-*Agents
+Agents.md
